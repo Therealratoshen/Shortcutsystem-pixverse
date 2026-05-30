@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Check } from 'lucide-react';
 import type { Template, TemplateCategory } from '../../types';
 import { templates } from '../../data/templates';
@@ -17,7 +18,7 @@ const categories: { id: TemplateCategory | 'all'; label: string }[] = [
 ];
 
 export default function TemplateSelector({ selectedTemplate, onSelect }: TemplateSelectorProps) {
-  const [activeCategory, setActiveCategory] = React.useState<TemplateCategory | 'all'>('all');
+  const [activeCategory, setActiveCategory] = useState<TemplateCategory | 'all'>('all');
 
   const filteredTemplates = activeCategory === 'all' 
     ? templates 
@@ -89,5 +90,3 @@ export default function TemplateSelector({ selectedTemplate, onSelect }: Templat
     </div>
   );
 }
-
-import React from 'react';
