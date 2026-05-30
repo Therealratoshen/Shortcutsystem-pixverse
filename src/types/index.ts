@@ -99,7 +99,7 @@ export interface UserProfile {
 }
 
 // Wizard step
-export type WizardStep = 'upload' | 'template' | 'customize' | 'generate' | 'export';
+export type WizardStep = 'upload' | 'template' | 'customize' | 'cli' | 'generate' | 'export';
 
 // API response types
 export interface PixVerseUploadResponse {

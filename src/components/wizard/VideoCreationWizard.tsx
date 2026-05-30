@@ -1,27 +1,22 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Sparkles, Check, Play, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, RefreshCw, Terminal, ExternalLink } from 'lucide-react';
 import { useVideo } from '../../contexts/VideoContext';
-import { useUserTier } from '../../contexts/UserTierContext';
-import { useFavorites } from '../../contexts/FavoritesContext';
-import { uploadImage, generateVideo as apiGenerateVideo, pollVideoStatus } from '../../services/pixverse';
-import type { VideoSettings, GeneratedVideo, WizardStep } from '../../types';
+import type { VideoSettings, WizardStep } from '../../types';
 import UploadZone from './UploadZone';
 import TemplateSelector from './TemplateSelector';
 import PromptBuilder from './PromptBuilder';
-import VideoPlayer from '../ui/VideoPlayer';
+import CLIWorkflow from './CLIWorkflow';
 
 const steps: { id: WizardStep; label: string }[] = [
   { id: 'upload', label: 'Upload' },
   { id: 'template', label: 'Template' },
   { id: 'customize', label: 'Customize' },
-  { id: 'generate', label: 'Generate' },
+  { id: 'cli', label: 'CLI Workflow' },
   { id: 'export', label: 'Export' },
 ];
 
 export default function VideoCreationWizard() {
-  const { state, setWizardStep, setTemplate, setUploadedImage, addGeneratedVideo, resetWizard, setGenerating, setProgress, setError } = useVideo();
-  const { incrementVideosGenerated, decrementVideosRemaining } = useUserTier();
-  const { addFavorite } = useFavorites();
+  const { state, setWizardStep, setTemplate, setUploadedImage, resetWizard } = useVideo();
 
   const [settings, setSettings] = useState<VideoSettings>({
     duration: 6,
@@ -32,10 +27,6 @@ export default function VideoCreationWizard() {
     prompt: '',
     negativePrompt: '',
   });
-
-  const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideo | null>(null);
-  const [generationStatus, setGenerationStatus] = useState<string>('');
-  const [isGenerating, setIsGenerating] = useState(false);
 
   const currentStepIndex = steps.findIndex(s => s.id === state.wizardStep);
 
@@ -79,106 +70,11 @@ export default function VideoCreationWizard() {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
-  const generateVideo = async () => {
-    if (!state.uploadedImage) return;
-
-    setIsGenerating(true);
-    setGenerating(true);
-    setWizardStep('generate');
-
-    try {
-      // Step 1: Upload image to PixVerse
-      setGenerationStatus('Uploading image to PixVerse...');
-      setProgress(10);
-
-      const uploadResult = await uploadImage(state.uploadedImage.file);
-      setProgress(20);
-      setGenerationStatus('Image uploaded successfully');
-
-      // Step 2: Generate video with PixVerse API
-      setGenerationStatus('Starting video generation...');
-
-      const videoId = await apiGenerateVideo(uploadResult.imgId, {
-        duration: settings.duration,
-        model: settings.model as any,
-        motionMode: settings.motionMode,
-        prompt: settings.prompt,
-        quality: settings.quality,
-        aspectRatio: settings.aspectRatio,
-        negativePrompt: settings.negativePrompt,
-      });
-
-      setProgress(30);
-      setGenerationStatus('Generating video...');
-
-      // Step 3: Poll for video completion
-      const result = await pollVideoStatus(
-        videoId,
-        (status) => {
-          setGenerationStatus(status);
-          // Progress from 30% to 90%
-          if (status.includes('%')) {
-            const match = status.match(/(\d+)/);
-            if (match) {
-              setProgress(Math.min(90, 30 + parseInt(match[1]) / 10));
-            }
-          }
-        }
-      );
-
-      setProgress(100);
-      setGenerationStatus('Video generated successfully!');
-
-      // Create generated video object
-      const video: GeneratedVideo = {
-        id: crypto.randomUUID(),
-        videoId: String(videoId),
-        url: result.url,
-        thumbnail: state.uploadedImage.url,
-        status: 'completed',
-        prompt: settings.prompt,
-        duration: settings.duration,
-        quality: settings.quality,
-        model: settings.model,
-        aspectRatio: settings.aspectRatio,
-        templateId: state.selectedTemplate?.id || '',
-        createdAt: Date.now(),
-        clips: [],
-      };
-
-      setGeneratedVideo(video);
-      addGeneratedVideo(video);
-      incrementVideosGenerated();
-      decrementVideosRemaining();
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setWizardStep('export');
-
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate video';
-      setError(errorMessage);
-      setGenerationStatus(`Error: ${errorMessage}`);
-    } finally {
-      setIsGenerating(false);
-      setGenerating(false);
-    }
-  };
-
-  const handleSaveToFavorites = () => {
-    if (generatedVideo) {
-      addFavorite({
-        id: crypto.randomUUID(),
-        videoId: generatedVideo.videoId,
-        thumbnail: generatedVideo.thumbnail || '',
-        title: `Fashion Video - ${state.selectedTemplate?.name}`,
-        category: state.selectedTemplate?.category || 'campaign',
-        addedAt: Date.now(),
-      });
-    }
+  const handleGoToCLI = () => {
+    goNext();
   };
 
   const handleStartOver = () => {
-    setGeneratedVideo(null);
     setSettings({
       duration: 6,
       quality: '720p',
@@ -299,7 +195,7 @@ export default function VideoCreationWizard() {
               <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold mb-2">Customize Your Video</h2>
                 <p className="text-text-secondary">
-                  {state.selectedTemplate?.name} template selected
+                  {state.selectedTemplate?.name || 'Custom'} template selected
                 </p>
               </div>
               <PromptBuilder
@@ -316,101 +212,101 @@ export default function VideoCreationWizard() {
                   Back
                 </button>
                 <button
-                  onClick={generateVideo}
-                  disabled={!canProceed() || isGenerating}
+                  onClick={handleGoToCLI}
+                  disabled={!canProceed()}
                   className="flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent-dark text-primary font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Sparkles className="w-5 h-5" />
-                  {isGenerating ? 'Generating...' : 'Generate Video'}
+                  <Terminal className="w-5 h-5" />
+                  Get CLI Commands
                 </button>
               </div>
             </div>
           )}
 
-          {/* Generate Step */}
-          {state.wizardStep === 'generate' && (
-            <div className="py-12 text-center">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-accent/10 flex items-center justify-center">
-                <Sparkles className="w-10 h-10 text-accent animate-pulse" />
-              </div>
-              <h2 className="text-2xl font-bold mb-4">Generating Your Video</h2>
-              <p className="text-text-secondary mb-8">{generationStatus}</p>
-              
-              {/* Progress Bar */}
-              <div className="max-w-md mx-auto">
-                <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-accent transition-all duration-500"
-                    style={{ width: `${state.generationProgress}%` }}
-                  />
-                </div>
-                <p className="text-sm text-text-muted mt-2">
-                  {state.generationProgress}% complete
-                </p>
-              </div>
-            </div>
+          {/* CLI Workflow Step */}
+          {state.wizardStep === 'cli' && (
+            <CLIWorkflow
+              uploadedImage={state.uploadedImage}
+              selectedTemplate={state.selectedTemplate}
+              settings={settings}
+            />
           )}
 
           {/* Export Step */}
-          {state.wizardStep === 'export' && generatedVideo && (
+          {state.wizardStep === 'export' && (
             <div className="space-y-6">
               <div className="text-center mb-8">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
-                  <Check className="w-8 h-8 text-success" />
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
+                  <Check className="w-8 h-8 text-accent" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Your Video is Ready!</h2>
+                <h2 className="text-2xl font-bold mb-2">Video Ready!</h2>
                 <p className="text-text-secondary">
-                  Duration: {generatedVideo.duration} seconds • Quality: {generatedVideo.quality}
+                  After generating with PixVerse CLI, you can manage your videos here
                 </p>
               </div>
 
-              {/* Video Preview */}
-              <VideoPlayer url={generatedVideo.url} />
-
-              {/* Export Options */}
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  { ratio: '9:16', label: 'TikTok / Reels', color: 'from-pink-500 to-purple-500' },
-                  { ratio: '1:1', label: 'Instagram Post', color: 'from-orange-500 to-yellow-500' },
-                  { ratio: '16:9', label: 'YouTube', color: 'from-red-500 to-pink-500' },
-                ].map((opt) => (
-                  <div
-                    key={opt.ratio}
-                    className={`p-4 rounded-xl bg-gradient-to-br ${opt.color} bg-opacity-10 border border-white/10 text-center cursor-pointer hover:scale-105 transition-transform`}
+              {/* Quick Actions */}
+              <div className="p-6 rounded-xl bg-primary border border-border">
+                <h3 className="font-semibold mb-4">Quick Actions</h3>
+                <div className="flex flex-wrap gap-3">
+                  <a
+                    href="https://platform.pixverse.ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-dark text-primary font-medium transition-colors"
                   >
-                    <div className="font-bold text-lg">{opt.ratio}</div>
-                    <div className="text-xs opacity-75">{opt.label}</div>
-                  </div>
-                ))}
+                    <ExternalLink className="w-4 h-4" />
+                    Open PixVerse Platform
+                  </a>
+                  <button
+                    onClick={handleStartOver}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Create Another Video
+                  </button>
+                </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex flex-wrap justify-center gap-4 pt-6 border-t border-border">
+              {/* Video Info */}
+              <div className="p-4 rounded-xl bg-primary border border-border">
+                <h3 className="font-semibold mb-3">Your Video Settings</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-text-muted">Template:</span>
+                    <span className="ml-2 font-medium">{state.selectedTemplate?.name || 'Custom'}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted">Duration:</span>
+                    <span className="ml-2 font-medium">{settings.duration}s</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted">Quality:</span>
+                    <span className="ml-2 font-medium">{settings.quality}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted">Model:</span>
+                    <span className="ml-2 font-medium">{settings.model}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Help */}
+              <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
+                <h3 className="font-semibold mb-2">Need Help?</h3>
+                <p className="text-sm text-text-secondary mb-3">
+                  If you haven't run the PixVerse CLI commands yet, go back to the CLI Workflow step.
+                </p>
                 <button
-                  onClick={handleSaveToFavorites}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"
+                  onClick={() => setWizardStep('cli')}
+                  className="flex items-center gap-2 text-sm text-accent hover:text-accent-dark transition-colors"
                 >
-                  <Check className="w-4 h-4" />
-                  Save to Favorites
-                </button>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors">
-                  <Play className="w-4 h-4" />
-                  Preview
-                </button>
-                <button
-                  onClick={handleStartOver}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Create Another
-                </button>
-                <button className="flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent-dark text-primary font-semibold rounded-xl transition-colors">
-                  Download Video
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to CLI Workflow
                 </button>
               </div>
             </div>
           )}
-
         </div>
       </div>
     </div>
