@@ -1,22 +1,27 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, RefreshCw, Terminal, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, RefreshCw, Sparkles, ExternalLink } from 'lucide-react';
 import { useVideo } from '../../contexts/VideoContext';
+import { useUserTier } from '../../contexts/UserTierContext';
+import { useFavorites } from '../../contexts/FavoritesContext';
 import type { VideoSettings, WizardStep } from '../../types';
 import UploadZone from './UploadZone';
 import TemplateSelector from './TemplateSelector';
 import PromptBuilder from './PromptBuilder';
-import CLIWorkflow from './CLIWorkflow';
 
 const steps: { id: WizardStep; label: string }[] = [
   { id: 'upload', label: 'Upload' },
   { id: 'template', label: 'Template' },
   { id: 'customize', label: 'Customize' },
-  { id: 'cli', label: 'CLI Workflow' },
+  { id: 'generate', label: 'Generate' },
   { id: 'export', label: 'Export' },
 ];
 
+type GenerationStatus = 'idle' | 'starting' | 'generating' | 'completed' | 'failed';
+
 export default function VideoCreationWizard() {
-  const { state, setWizardStep, setTemplate, setUploadedImage, resetWizard } = useVideo();
+  const { state, setWizardStep, setTemplate, setUploadedImage, addGeneratedVideo, resetWizard } = useVideo();
+  const { incrementVideosGenerated, decrementVideosRemaining } = useUserTier();
+  const { } = useFavorites();
 
   const [settings, setSettings] = useState<VideoSettings>({
     duration: 6,
@@ -27,6 +32,10 @@ export default function VideoCreationWizard() {
     prompt: '',
     negativePrompt: '',
   });
+
+  const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const currentStepIndex = steps.findIndex(s => s.id === state.wizardStep);
 
@@ -70,11 +79,78 @@ export default function VideoCreationWizard() {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
-  const handleGoToCLI = () => {
+  const handleGenerateVideo = async () => {
+    if (!state.uploadedImage || !settings.prompt.trim()) return;
+
+    setIsGenerating(true);
+    setGenerationStatus('starting');
+    setErrorMessage(null);
+    setWizardStep('generate');
+
+    try {
+      const response = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          settings: {
+            prompt: settings.prompt,
+            duration: settings.duration,
+            model: settings.model,
+            quality: settings.quality,
+            aspectRatio: settings.aspectRatio,
+            imageUrl: state.uploadedImage.url,
+            templateId: state.selectedTemplate?.id || null,
+            templateName: state.selectedTemplate?.name || null,
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Failed to start video generation');
+      }
+
+      setGenerationStatus('generating');
+
+      const video = {
+        id: crypto.randomUUID(),
+        videoId: data.jobId,
+        url: state.uploadedImage.url,
+        thumbnail: state.uploadedImage.url,
+        status: 'generating' as const,
+        prompt: settings.prompt,
+        duration: settings.duration,
+        quality: settings.quality,
+        model: settings.model,
+        aspectRatio: settings.aspectRatio,
+        templateId: state.selectedTemplate?.id || '',
+        createdAt: Date.now(),
+        clips: [],
+      };
+
+      addGeneratedVideo(video);
+      incrementVideosGenerated();
+      decrementVideosRemaining();
+
+    } catch (error) {
+      setGenerationStatus('failed');
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to generate video');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleVideoReady = () => {
+    setGenerationStatus('completed');
     goNext();
   };
 
   const handleStartOver = () => {
+    setGenerationStatus('idle');
+    setErrorMessage(null);
     setSettings({
       duration: 6,
       quality: '720p',
@@ -212,60 +288,129 @@ export default function VideoCreationWizard() {
                   Back
                 </button>
                 <button
-                  onClick={handleGoToCLI}
-                  disabled={!canProceed()}
+                  onClick={handleGenerateVideo}
+                  disabled={!canProceed() || isGenerating}
                   className="flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent-dark text-primary font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Terminal className="w-5 h-5" />
-                  Get CLI Commands
+                  <Sparkles className="w-5 h-5" />
+                  {isGenerating ? 'Starting...' : 'Generate Video'}
                 </button>
               </div>
             </div>
           )}
 
-          {/* CLI Workflow Step */}
-          {state.wizardStep === 'cli' && (
-            <CLIWorkflow
-              uploadedImage={state.uploadedImage}
-              selectedTemplate={state.selectedTemplate}
-              settings={settings}
-            />
+          {/* Generate Step */}
+          {state.wizardStep === 'generate' && (
+            <div className="py-12 text-center">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-accent/10 flex items-center justify-center">
+                <Sparkles className={`w-10 h-10 text-accent ${isGenerating ? 'animate-pulse' : ''}`} />
+              </div>
+              <h2 className="text-2xl font-bold mb-4">
+                {generationStatus === 'starting' && 'Starting Generation...'}
+                {generationStatus === 'generating' && 'Generating Your Video'}
+                {generationStatus === 'failed' && 'Generation Failed'}
+              </h2>
+              
+              {generationStatus === 'failed' ? (
+                <div className="space-y-4">
+                  <p className="text-error">{errorMessage}</p>
+                  <div className="flex justify-center gap-3">
+                    <button
+                      onClick={() => {
+                        setGenerationStatus('idle');
+                        setWizardStep('customize');
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back to Customize
+                    </button>
+                    <button
+                      onClick={handleGenerateVideo}
+                      className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-colors"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-text-secondary mb-8">
+                    {generationStatus === 'starting' && 'Setting up GitHub Actions...'}
+                    {generationStatus === 'generating' && 'Your video is being generated via PixVerse CLI. This may take a few minutes.'}
+                  </p>
+
+                  <div className="p-4 rounded-xl bg-primary border border-border text-left max-w-md mx-auto mb-6">
+                    <h3 className="font-semibold mb-2 text-sm">Settings:</h3>
+                    <div className="text-sm text-text-secondary space-y-1">
+                      <p>Model: {settings.model}</p>
+                      <p>Duration: {settings.duration}s</p>
+                      <p>Quality: {settings.quality}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <a
+                      href="https://github.com/Therealratoshen/Shortcutsystem-pixverse/actions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      View on GitHub
+                    </a>
+                    <button
+                      onClick={handleVideoReady}
+                      className="flex items-center gap-2 px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      Back
+                    </button>
+                    <button
+                      onClick={handleVideoReady}
+                      className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-colors"
+                    >
+                      Continue to Export
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {/* Export Step */}
           {state.wizardStep === 'export' && (
             <div className="space-y-6">
               <div className="text-center mb-8">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
-                  <Check className="w-8 h-8 text-accent" />
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
+                  <Check className="w-8 h-8 text-success" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Video Ready!</h2>
+                <h2 className="text-2xl font-bold mb-2">Video Generation Started!</h2>
                 <p className="text-text-secondary">
-                  After generating with PixVerse CLI, you can manage your videos here
+                  Your video is being generated via GitHub Actions and PixVerse CLI
                 </p>
               </div>
 
-              {/* Quick Actions */}
+              {/* Status Card */}
               <div className="p-6 rounded-xl bg-primary border border-border">
-                <h3 className="font-semibold mb-4">Quick Actions</h3>
-                <div className="flex flex-wrap gap-3">
-                  <a
-                    href="https://platform.pixverse.ai"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-dark text-primary font-medium transition-colors"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Open PixVerse Platform
-                  </a>
-                  <button
-                    onClick={handleStartOver}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Create Another Video
-                  </button>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold">Generation Status</h3>
+                  <span className="px-3 py-1 rounded-full bg-accent/20 text-accent text-sm">
+                    In Progress
+                  </span>
                 </div>
+                <p className="text-sm text-text-secondary mb-4">
+                  Your video is being generated. Check GitHub Actions for real-time status.
+                </p>
+                <a
+                  href="https://github.com/Therealratoshen/Shortcutsystem-pixverse/actions"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-dark text-primary font-medium transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Check GitHub Actions
+                </a>
               </div>
 
               {/* Video Info */}
@@ -291,18 +436,14 @@ export default function VideoCreationWizard() {
                 </div>
               </div>
 
-              {/* Help */}
-              <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
-                <h3 className="font-semibold mb-2">Need Help?</h3>
-                <p className="text-sm text-text-secondary mb-3">
-                  If you haven't run the PixVerse CLI commands yet, go back to the CLI Workflow step.
-                </p>
+              {/* Actions */}
+              <div className="flex flex-wrap justify-center gap-3 pt-4">
                 <button
-                  onClick={() => setWizardStep('cli')}
-                  className="flex items-center gap-2 text-sm text-accent hover:text-accent-dark transition-colors"
+                  onClick={handleStartOver}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  Back to CLI Workflow
+                  <RefreshCw className="w-4 h-4" />
+                  Create Another
                 </button>
               </div>
             </div>

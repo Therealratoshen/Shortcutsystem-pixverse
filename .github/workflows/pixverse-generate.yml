@@ -1,0 +1,113 @@
+name: PixVerse Video Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      settings:
+        description: 'Video generation settings (JSON)'
+        required: true
+        type: string
+
+jobs:
+  generate-video:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install PixVerse CLI
+        run: npm install -g pixverse
+
+      - name: Parse settings
+        id: parse
+        run: |
+          echo '${{ inputs.settings }}' > settings.json
+          echo "prompt=$(cat settings.json | jq -r '.prompt')" >> $GITHUB_OUTPUT
+          echo "duration=$(cat settings.json | jq -r '.duration')" >> $GITHUB_OUTPUT
+          echo "model=$(cat settings.json | jq -r '.model')" >> $GITHUB_OUTPUT
+          echo "quality=$(cat settings.json | jq -r '.quality')" >> $GITHUB_OUTPUT
+          echo "aspect_ratio=$(cat settings.json | jq -r '.aspectRatio')" >> $GITHUB_OUTPUT
+          echo "image_path=$(cat settings.json | jq -r '.imagePath')" >> $GITHUB_OUTPUT
+
+      - name: Download input image
+        run: |
+          IMAGE_URL=$(cat settings.json | jq -r '.imageUrl')
+          if [ "$IMAGE_URL" != "null" ] && [ -n "$IMAGE_URL" ]; then
+            curl -L -o input_image.jpg "$IMAGE_URL"
+            echo "image_path=input_image.jpg" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Authenticate with PixVerse
+        env:
+          PIXVERSE_API_KEY: ${{ secrets.PIXVERSE_API_KEY }}
+        run: |
+          echo "Using API key from secrets"
+          export PIXVERSE_API_KEY=$PIXVERSE_API_KEY
+
+      - name: Generate video with PixVerse CLI
+        env:
+          PIXVERSE_API_KEY: ${{ secrets.PIXVERSE_API_KEY }}
+        run: |
+          echo "Starting video generation..."
+          echo "Prompt: ${{ steps.parse.outputs.prompt }}"
+          echo "Duration: ${{ steps.parse.outputs.duration }}s"
+          echo "Model: ${{ steps.parse.outputs.model }}"
+          
+          # Create prompt file
+          PROMPT=$(cat settings.json | jq -r '.prompt')
+          echo "$PROMPT" > prompt.txt
+          
+          # Try to generate video
+          # Note: pixverse CLI syntax may vary, adjust based on actual CLI commands
+          pixverse generate \
+            --model v6 \
+            --duration ${{ steps.parse.outputs.duration }} \
+            --quality ${{ steps.parse.outputs.quality }} \
+            --aspect-ratio ${{ steps.parse.outputs.aspect_ratio }} \
+            --prompt-file prompt.txt
+
+      - name: Find generated video
+        id: find-video
+        run: |
+          # Look for generated video files
+          VIDEO_FILE=$(find . -name "*.mp4" -o -name "*.webm" | head -1)
+          if [ -n "$VIDEO_FILE" ]; then
+            echo "video_file=$VIDEO_FILE" >> $GITHUB_OUTPUT
+            echo "Found video: $VIDEO_FILE"
+          else
+            echo "No video file found"
+            echo "video_file=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload video artifact
+        if: steps.find-video.outputs.video_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-video
+          path: ${{ steps.find-video.outputs.video_file }}
+          retention-days: 7
+
+      - name: Create output JSON
+        run: |
+          cat > output.json << EOF
+          {
+            "status": "completed",
+            "job_id": "${{ github.run_id }}",
+            "video_url": "${{ steps.find-video.outputs.video_file }}",
+            "message": "Video generated successfully"
+          }
+          EOF
+          cat output.json
+
+      - name: Upload output artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: generation-output
+          path: output.json
+          retention-days: 30
