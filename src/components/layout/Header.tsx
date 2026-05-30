@@ -28,7 +28,7 @@ export default function Header() {
               <Sparkles className="w-5 h-5 text-primary" />
             </div>
             <span className="text-xl font-bold tracking-tight">
-              Shortcut<span className="gradient-text">Sistem</span>
+              Shortcutsystem<span className="gradient-text"></span>
             </span>
           </button>
 

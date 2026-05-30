@@ -11,7 +11,7 @@ export default function Footer() {
               <Sparkles className="w-5 h-5 text-primary" />
             </div>
             <span className="text-lg font-bold">
-              Shortcut<span className="gradient-text">Sistem</span>
+              Shortcutsystem<span className="gradient-text"></span>
             </span>
           </div>
 
@@ -24,7 +24,7 @@ export default function Footer() {
 
           {/* Copyright */}
           <div className="text-sm text-text-muted">
-            © 2026 ShortcutSistem. TRAE Hackathon Project.
+            © 2026 Shortcutsystem. TRAE Hackathon Project.
           </div>
         </div>
       </div>
