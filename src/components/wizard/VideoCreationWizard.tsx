@@ -226,6 +226,17 @@ export default function VideoCreationWizard() {
                 </p>
               </div>
               <UploadZone onUpload={handleImageUpload} />
+              <div className="pt-6 border-t border-border flex justify-between">
+                <div />
+                <button
+                  onClick={goNext}
+                  disabled={!canProceed()}
+                  className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
 
@@ -242,6 +253,23 @@ export default function VideoCreationWizard() {
                 selectedTemplate={state.selectedTemplate}
                 onSelect={handleTemplateSelect}
               />
+              <div className="pt-6 border-t border-border flex justify-between">
+                <button
+                  onClick={goBack}
+                  className="flex items-center gap-2 px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+                <button
+                  onClick={goNext}
+                  disabled={!canProceed()}
+                  className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
 
@@ -363,27 +391,6 @@ export default function VideoCreationWizard() {
             </div>
           )}
 
-          {/* Navigation Buttons (for non-generate steps) */}
-          {state.wizardStep !== 'generate' && state.wizardStep !== 'export' && (
-            <div className="pt-6 border-t border-border flex justify-between">
-              <button
-                onClick={goBack}
-                disabled={currentStepIndex === 0}
-                className="flex items-center gap-2 px-4 py-2 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </button>
-              <button
-                onClick={goNext}
-                disabled={!canProceed()}
-                className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
