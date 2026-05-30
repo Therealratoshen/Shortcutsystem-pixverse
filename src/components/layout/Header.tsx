@@ -24,11 +24,11 @@ export default function Header() {
             onClick={() => setView('landing')}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
-            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-primary" />
+            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center font-bold text-primary text-sm">
+              SS
             </div>
             <span className="text-xl font-bold tracking-tight">
-              Shortcutsystem<span className="gradient-text"></span>
+              Shortcut<span className="gradient-text">Sistem</span>
             </span>
           </button>
 

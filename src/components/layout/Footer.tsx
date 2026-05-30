@@ -1,5 +1,3 @@
-import { Sparkles } from 'lucide-react';
-
 export default function Footer() {
   return (
     <footer className="py-12 border-t border-border">
@@ -7,11 +5,11 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-primary" />
+            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center font-bold text-primary text-sm">
+              SS
             </div>
             <span className="text-lg font-bold">
-              Shortcutsystem<span className="gradient-text"></span>
+              Shortcut<span className="gradient-text">Sistem</span>
             </span>
           </div>
 
@@ -24,7 +22,7 @@ export default function Footer() {
 
           {/* Copyright */}
           <div className="text-sm text-text-muted">
-            © 2026 Shortcutsystem. TRAE Hackathon Project.
+            © 2026 ShortcutSistem. TRAE Hackathon Project.
           </div>
         </div>
       </div>
