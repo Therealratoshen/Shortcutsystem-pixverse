@@ -104,7 +104,7 @@ export default function VideoUpload({ onUpload, onSkip }: VideoUploadProps) {
       <div className="text-center mb-6">
         <h2 className="text-2xl font-bold mb-2">Upload Your Generated Video</h2>
         <p className="text-text-secondary">
-          Upload the video you generated using PixVerse CLI
+          Upload your generated fashion video
         </p>
       </div>
 
@@ -211,9 +211,9 @@ export default function VideoUpload({ onUpload, onSkip }: VideoUploadProps) {
       <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
         <h4 className="font-semibold mb-2 text-sm">How to generate a video:</h4>
         <ol className="space-y-1 text-sm text-text-secondary list-decimal list-inside">
-          <li>Copy the CLI commands from the previous step</li>
-          <li>Run the commands in your terminal locally</li>
-          <li>Upload the generated .mp4 file here</li>
+          <li>Use the video creation wizard to set up your video</li>
+          <li>Click "Generate Video" to create your fashion video</li>
+          <li>Upload your generated video here to save it</li>
         </ol>
       </div>
     </div>

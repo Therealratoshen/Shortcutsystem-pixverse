@@ -1,12 +1,26 @@
-import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, RefreshCw, Sparkles, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, ArrowRight, Check, RefreshCw, Sparkles } from 'lucide-react';
 import { useVideo } from '../../contexts/VideoContext';
 import { useUserTier } from '../../contexts/UserTierContext';
-import { useFavorites } from '../../contexts/FavoritesContext';
-import type { VideoSettings, WizardStep } from '../../types';
+import type { VideoSettings, WizardStep, VideoQuality } from '../../types';
+import { analyzeProductImage, generateSmartPrompt, getProductRecommendations, generateMiniMaxEnhancedPrompt } from '../../services/productIntelligence';
+import { analyzeProductImageFile } from '../../services/minimax';
 import UploadZone from './UploadZone';
 import TemplateSelector from './TemplateSelector';
 import PromptBuilder from './PromptBuilder';
+import ProductInsights from './ProductInsights';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+interface ProductInsightsData {
+  productName: string;
+  category: string;
+  color: string[];
+  material: string[];
+  style: string[];
+  features: string[];
+  isAiGenerated?: boolean;
+}
 
 const steps: { id: WizardStep; label: string }[] = [
   { id: 'upload', label: 'Upload' },
@@ -21,7 +35,6 @@ type GenerationStatus = 'idle' | 'starting' | 'generating' | 'completed' | 'fail
 export default function VideoCreationWizard() {
   const { state, setWizardStep, setTemplate, setUploadedImage, addGeneratedVideo, resetWizard } = useVideo();
   const { incrementVideosGenerated, decrementVideosRemaining } = useUserTier();
-  const { } = useFavorites();
 
   const [settings, setSettings] = useState<VideoSettings>({
     duration: 6,
@@ -36,6 +49,48 @@ export default function VideoCreationWizard() {
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoStatus, setVideoStatus] = useState<string>('processing');
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [productInsights, setProductInsights] = useState<ProductInsightsData | null>(null);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (state.wizardStep === 'export' && currentTaskId && videoStatus === 'processing') {
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/video-status/${currentTaskId}`);
+          const data = await response.json();
+          
+          if (data.status === 'completed') {
+            setVideoStatus('completed');
+            setVideoUrl(data.videoUrl || data.outputPath);
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+            }
+          } else if (data.status === 'failed') {
+            setVideoStatus('failed');
+            setErrorMessage(data.error || 'Video generation failed');
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current);
+            }
+          } else {
+            setVideoStatus('processing');
+          }
+        } catch (error) {
+          console.error('Error polling video status:', error);
+        }
+      }, 5000);
+
+      return () => {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+        }
+      };
+    }
+  }, [state.wizardStep, currentTaskId, videoStatus]);
 
   const currentStepIndex = steps.findIndex(s => s.id === state.wizardStep);
 
@@ -58,20 +113,140 @@ export default function VideoCreationWizard() {
       case 'template':
         return !!state.selectedTemplate;
       case 'customize':
-        return !!settings.prompt.trim();
+        // Check both settings.prompt and fallback to selectedTemplate.prompt
+        const currentPrompt = settings.prompt || state.selectedTemplate?.prompt || '';
+        return !!(currentPrompt && currentPrompt.trim().length > 0);
       default:
         return true;
     }
   };
 
-  const handleImageUpload = (image: any) => {
-    setUploadedImage(image);
+  const handleImageUpload = async (image: any) => {
+    setIsAnalyzingImage(true);
+    setAnalysisError(null);
+
+    
+    
+
+    if (image.file) {
+      try {
+        
+        const result = await analyzeProductImageFile(image.file, '');
+
+        if (result.success && result.insights) {
+          
+
+          const miniMaxInsights: ProductInsightsData = {
+            productName: result.insights.productName,
+            category: result.insights.category,
+            color: result.insights.color,
+            material: result.insights.material,
+            style: result.insights.style,
+            features: result.insights.features,
+            isAiGenerated: true,
+          };
+
+          setProductInsights(miniMaxInsights);
+          const recommendations = getProductRecommendations(miniMaxInsights.category);
+
+          const productFeaturesForPrompt = {
+            category: result.insights.category,
+            color: result.insights.color,
+            material: result.insights.material,
+            style: result.insights.style,
+            features: result.insights.features,
+            keywords: result.insights.keywords,
+            productName: result.insights.productName,
+          };
+
+          const enhancedPrompt = generateMiniMaxEnhancedPrompt(productFeaturesForPrompt, 'product_showcase');
+
+          setSettings(prev => ({
+            ...prev,
+            duration: recommendations.totalDuration,
+            aspectRatio: recommendations.aspectRatio as any,
+            quality: recommendations.quality as VideoQuality,
+            prompt: enhancedPrompt,
+          }));
+
+          setIsAnalyzingImage(false);
+          goNext();
+          return;
+        } else {
+          
+          setAnalysisError(result.error || 'AI analysis failed');
+        }
+      } catch (error) {
+        console.error('[MiniMax] Error:', error);
+        setAnalysisError('AI analysis error');
+      }
+    } else {
+      
+    }
+
+    
+    const productFeatures = analyzeProductImage(image.url, image.name);
+    const recommendations = getProductRecommendations(productFeatures.category);
+
+    setProductInsights({
+      productName: productFeatures.productName,
+      category: productFeatures.category,
+      color: productFeatures.color,
+      material: productFeatures.material,
+      style: productFeatures.style,
+      features: productFeatures.features,
+      isAiGenerated: false,
+    });
+
+    setSettings(prev => ({
+      ...prev,
+      duration: recommendations.totalDuration,
+      aspectRatio: recommendations.aspectRatio as any,
+      quality: recommendations.quality as VideoQuality,
+    }));
+
+    setIsAnalyzingImage(false);
     goNext();
   };
 
   const handleTemplateSelect = (template: any) => {
     setTemplate(template);
-    setSettings(prev => ({ ...prev, prompt: template.prompt, motionMode: template.motionMode }));
+    
+    let finalPrompt = template.prompt;
+    let recommendedSettings = { shots: 6, durationPerShot: 5, totalDuration: 30 };
+    
+    // Always generate product-aware prompt if we have product insights
+    if (productInsights && productInsights.productName) {
+       const productFeatures = {
+         category: productInsights.category as any,
+         productName: productInsights.productName,
+         color: productInsights.color || [],
+         material: productInsights.material || [],
+         style: productInsights.style as any || [],
+         features: productInsights.features || [],
+         keywords: [],
+       };
+      
+      const smartPrompt = generateSmartPrompt(productFeatures, template.category as any);
+      finalPrompt = smartPrompt.mainPrompt;
+      recommendedSettings = {
+        shots: smartPrompt.shots,
+        durationPerShot: smartPrompt.durationPerShot,
+        totalDuration: smartPrompt.totalDuration,
+      };
+    }
+    
+    console.log('[DEBUG] Template:', template.name);
+    console.log('[DEBUG] Product:', productInsights?.productName);
+    console.log('[DEBUG] Prompt:', finalPrompt?.substring(0, 80));
+    
+    setSettings(prev => ({ 
+      ...prev, 
+      prompt: finalPrompt, 
+      motionMode: template.motionMode,
+      duration: recommendedSettings.totalDuration,
+    }));
+    
     goNext();
   };
 
@@ -80,15 +255,24 @@ export default function VideoCreationWizard() {
   };
 
   const handleGenerateVideo = async () => {
-    if (!state.uploadedImage || !settings.prompt.trim()) return;
+    
+    
+    
+    
+    
+    if (!state.uploadedImage || !settings.prompt.trim()) {
+      
+      return;
+    }
 
+    
     setIsGenerating(true);
     setGenerationStatus('starting');
     setErrorMessage(null);
     setWizardStep('generate');
 
     try {
-      const response = await fetch('/api/generate-video', {
+      const response = await fetch(`${API_BASE_URL}/api/generate-video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -114,10 +298,11 @@ export default function VideoCreationWizard() {
       }
 
       setGenerationStatus('generating');
+      setCurrentTaskId(data.taskId);
 
       const video = {
         id: crypto.randomUUID(),
-        videoId: data.jobId,
+        videoId: data.taskId,
         url: state.uploadedImage.url,
         thumbnail: state.uploadedImage.url,
         status: 'generating' as const,
@@ -143,14 +328,12 @@ export default function VideoCreationWizard() {
     }
   };
 
-  const handleVideoReady = () => {
-    setGenerationStatus('completed');
-    goNext();
-  };
-
   const handleStartOver = () => {
     setGenerationStatus('idle');
     setErrorMessage(null);
+    setVideoUrl(null);
+    setVideoStatus('processing');
+    setCurrentTaskId(null);
     setSettings({
       duration: 6,
       quality: '720p',
@@ -216,13 +399,38 @@ export default function VideoCreationWizard() {
                 <p className="text-text-secondary">
                   Start by uploading a clear image of your fashion product
                 </p>
+                <p className="text-xs text-accent mt-2">
+                  ✨ Powered by MiniMax M.2.7 for AI-powered insights
+                </p>
               </div>
+
+              {isAnalyzingImage && (
+                <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+                    <div>
+                      <p className="font-medium text-sm">Analyzing with MiniMax M.2.7</p>
+                      <p className="text-xs text-text-muted">Detecting product insights...</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {analysisError && (
+                <div className="p-4 rounded-xl bg-error/5 border border-error/20">
+                  <p className="text-sm text-error">
+                    ⚠️ {analysisError} - Using fallback analysis
+                  </p>
+                </div>
+              )}
+
               <UploadZone onUpload={handleImageUpload} />
+
               <div className="pt-6 border-t border-border flex justify-between">
                 <div />
                 <button
                   onClick={goNext}
-                  disabled={!canProceed()}
+                  disabled={!canProceed() || isAnalyzingImage}
                   className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
@@ -274,8 +482,21 @@ export default function VideoCreationWizard() {
                   {state.selectedTemplate?.name || 'Custom'} template selected
                 </p>
               </div>
+              
+              {productInsights && (
+                <ProductInsights
+                  productName={productInsights.productName}
+                  category={productInsights.category}
+                  color={productInsights.color}
+                  material={productInsights.material}
+                  style={productInsights.style}
+                  features={productInsights.features}
+                  isAiGenerated={productInsights.isAiGenerated}
+                />
+              )}
+              
               <PromptBuilder
-                templatePrompt={state.selectedTemplate?.prompt || ''}
+                templatePrompt={settings.prompt || state.selectedTemplate?.prompt || ''}
                 settings={settings}
                 onSettingsChange={handleSettingsChange}
               />
@@ -336,43 +557,45 @@ export default function VideoCreationWizard() {
               ) : (
                 <>
                   <p className="text-text-secondary mb-8">
-                    {generationStatus === 'starting' && 'Setting up GitHub Actions...'}
-                    {generationStatus === 'generating' && 'Your video is being generated via PixVerse CLI. This may take a few minutes.'}
+                    {generationStatus === 'starting' && 'Preparing your fashion video...'}
+                    {generationStatus === 'generating' && 'Creating your fashion video with AI. This may take a few minutes.'}
                   </p>
 
-                  <div className="p-4 rounded-xl bg-primary border border-border text-left max-w-md mx-auto mb-6">
-                    <h3 className="font-semibold mb-2 text-sm">Settings:</h3>
-                    <div className="text-sm text-text-secondary space-y-1">
-                      <p>Model: {settings.model}</p>
-                      <p>Duration: {settings.duration}s</p>
-                      <p>Quality: {settings.quality}</p>
+                  <div className="p-6 rounded-xl bg-primary border border-border text-left max-w-md mx-auto mb-6">
+                    <h3 className="font-semibold mb-3 text-sm">Video Details:</h3>
+                    <div className="text-sm text-text-secondary space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">Template:</span>
+                        <span className="font-medium">{state.selectedTemplate?.name || 'Custom'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">Duration:</span>
+                        <span className="font-medium">{settings.duration}s per clip</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">Total Length:</span>
+                        <span className="font-medium">
+                          {settings.duration}s ({Math.floor(settings.duration / 60)}m {settings.duration % 60}s)
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">Quality:</span>
+                        <span className="font-medium">{settings.quality}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">Format:</span>
+                        <span className="font-medium">{settings.aspectRatio}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">AI Model:</span>
+                        <span className="font-medium">{settings.model}</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap justify-center gap-3">
-                    <a
-                      href="https://github.com/Therealratoshen/Shortcutsystem-pixverse/actions"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      View on GitHub
-                    </a>
-                    <button
-                      onClick={handleVideoReady}
-                      className="flex items-center gap-2 px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
-                    >
-                      <ArrowLeft className="w-4 h-4" />
-                      Back
-                    </button>
-                    <button
-                      onClick={handleVideoReady}
-                      className="flex items-center gap-2 px-6 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-colors"
-                    >
-                      Continue to Export
-                    </button>
-                  </div>
+                  <p className="text-sm text-text-muted">
+                    Your video will be ready in the next step
+                  </p>
                 </>
               )}
             </div>
@@ -382,40 +605,89 @@ export default function VideoCreationWizard() {
           {state.wizardStep === 'export' && (
             <div className="space-y-6">
               <div className="text-center mb-8">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
-                  <Check className="w-8 h-8 text-success" />
-                </div>
-                <h2 className="text-2xl font-bold mb-2">Video Generation Started!</h2>
-                <p className="text-text-secondary">
-                  Your video is being generated via GitHub Actions and PixVerse CLI
-                </p>
+                {videoStatus === 'completed' ? (
+                  <>
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
+                      <Check className="w-8 h-8 text-success" />
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2">Video Ready!</h2>
+                    <p className="text-text-secondary">
+                      Your fashion video has been generated successfully
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center animate-pulse">
+                      <Sparkles className="w-8 h-8 text-accent" />
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2">Generating Your Video</h2>
+                    <p className="text-text-secondary">
+                      Please wait while PixVerse creates your fashion video...
+                    </p>
+                  </>
+                )}
               </div>
+
+              {/* Video Player */}
+              {videoStatus === 'completed' && videoUrl && (
+                <div className="rounded-xl overflow-hidden bg-black">
+                  <video
+                    src={videoUrl}
+                    controls
+                    autoPlay
+                    className="w-full aspect-video"
+                    poster={state.uploadedImage?.url}
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              )}
 
               {/* Status Card */}
               <div className="p-6 rounded-xl bg-primary border border-border">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold">Generation Status</h3>
-                  <span className="px-3 py-1 rounded-full bg-accent/20 text-accent text-sm">
-                    In Progress
+                  <span className={`px-3 py-1 rounded-full text-sm ${
+                    videoStatus === 'completed' 
+                      ? 'bg-success/20 text-success' 
+                      : videoStatus === 'failed'
+                      ? 'bg-error/20 text-error'
+                      : 'bg-accent/20 text-accent'
+                  }`}>
+                    {videoStatus === 'completed' ? 'Completed' : videoStatus === 'failed' ? 'Failed' : 'In Progress'}
                   </span>
                 </div>
-                <p className="text-sm text-text-secondary mb-4">
-                  Your video is being generated. Check GitHub Actions for real-time status.
-                </p>
-                <a
-                  href="https://github.com/Therealratoshen/Shortcutsystem-pixverse/actions"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-dark text-primary font-medium transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Check GitHub Actions
-                </a>
+                
+                {videoStatus === 'processing' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin w-4 h-4 border-2 border-accent border-t-transparent rounded-full"></div>
+                      <span className="text-sm text-text-secondary">
+                        Creating your fashion video with AI...
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-muted">
+                      This usually takes 1-3 minutes
+                    </p>
+                  </div>
+                )}
+
+                {videoStatus === 'failed' && errorMessage && (
+                  <p className="text-sm text-error">
+                    Error: {errorMessage}
+                  </p>
+                )}
+
+                {videoStatus === 'completed' && (
+                  <p className="text-sm text-success">
+                    Video generated successfully!
+                  </p>
+                )}
               </div>
 
               {/* Video Info */}
               <div className="p-4 rounded-xl bg-primary border border-border">
-                <h3 className="font-semibold mb-3">Your Video Settings</h3>
+                <h3 className="font-semibold mb-3">Video Details</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-text-muted">Template:</span>
@@ -438,6 +710,15 @@ export default function VideoCreationWizard() {
 
               {/* Actions */}
               <div className="flex flex-wrap justify-center gap-3 pt-4">
+                {videoStatus === 'completed' && videoUrl && (
+                  <a
+                    href={videoUrl}
+                    download
+                    className="flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent-dark text-primary font-semibold rounded-xl transition-all"
+                  >
+                    Download Video
+                  </a>
+                )}
                 <button
                   onClick={handleStartOver}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary transition-colors"

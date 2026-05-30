@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Play, Heart, Trash2, Filter } from 'lucide-react';
+import { Play, Heart, Trash2, Filter, X } from 'lucide-react';
 import { useVideo } from '../../contexts/VideoContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
 import type { TemplateCategory } from '../../types';
+import VideoPlayer from '../ui/VideoPlayer';
 
 const categories: { id: TemplateCategory | 'all'; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -18,6 +19,7 @@ export default function VideoGallery() {
   const { favorites, removeFavorite, isFavorite } = useFavorites();
   const [activeCategory, setActiveCategory] = useState<TemplateCategory | 'all'>('all');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
 
   const filteredVideos = state.generatedVideos.filter(video => {
     const matchesCategory = activeCategory === 'all' || video.templateId.includes(activeCategory);
@@ -90,7 +92,8 @@ export default function VideoGallery() {
             {filteredVideos.map((video) => (
               <div
                 key={video.id}
-                className="group rounded-2xl overflow-hidden bg-secondary hover-lift"
+                className="group rounded-2xl overflow-hidden bg-secondary hover-lift cursor-pointer"
+                onClick={() => setSelectedVideo(video)}
               >
                 {/* Thumbnail */}
                 <div className="relative aspect-video">
@@ -119,7 +122,10 @@ export default function VideoGallery() {
                       </p>
                     </div>
                     <button
-                      onClick={() => removeFavorite(video.videoId)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFavorite(video.videoId);
+                      }}
                       className={`p-2 rounded-lg transition-colors ${
                         isFavorite(video.videoId)
                           ? 'bg-error/20 text-error'
@@ -172,6 +178,47 @@ export default function VideoGallery() {
           </div>
         )}
       </div>
+
+      {/* Video Modal */}
+      {selectedVideo && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedVideo(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl bg-secondary rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedVideo(null)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Video Player */}
+            <VideoPlayer
+              url={selectedVideo.url || selectedVideo.videoUrl || ''}
+              poster={selectedVideo.thumbnail}
+            />
+
+            {/* Video Info */}
+            <div className="p-6">
+              <h3 className="text-xl font-bold mb-2">Fashion Video</h3>
+              <p className="text-sm text-text-secondary mb-4">
+                {selectedVideo.prompt || 'Generated video'}
+              </p>
+              <div className="flex items-center gap-4 text-sm text-text-muted">
+                <span>{selectedVideo.quality}</span>
+                <span>{selectedVideo.duration}s</span>
+                <span>{selectedVideo.model}</span>
+                <span>{new Date(selectedVideo.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,12 @@ export type VideoStatus = 'idle' | 'uploading' | 'generating' | 'processing' | '
 // Template categories
 export type TemplateCategory = 'runway' | 'street' | 'editorial' | 'campaign' | 'lifestyle' | 'comparison';
 
+// Product categories for insights
+export type ProductCategory = 'bag' | 'shoes' | 'dress' | 'top' | 'bottom' | 'accessories';
+
+// Product styles
+export type ProductStyle = 'luxury' | 'casual' | 'sporty' | 'classic' | 'modern' | 'bohemian' | 'formal';
+
 // Video aspect ratio for export
 export type AspectRatio = '9:16' | '1:1' | '16:9';
 
@@ -99,7 +105,7 @@ export interface UserProfile {
 }
 
 // Wizard step
-export type WizardStep = 'upload' | 'template' | 'customize' | 'cli' | 'generate' | 'export';
+export type WizardStep = 'upload' | 'template' | 'customize' | 'preview' | 'generate' | 'export';
 
 // API response types
 export interface PixVerseUploadResponse {

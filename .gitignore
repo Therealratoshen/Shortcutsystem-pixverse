@@ -1,5 +1,13 @@
 node_modules
 dist
 .env
+.env.example
 *.local
 .vercel
+server.log
+uploads/
+tasks.json
+*.mp4
+*.pptx
+*.key
+generated-videos/

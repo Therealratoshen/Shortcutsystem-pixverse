@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, Wand2, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUserTier } from '../../contexts/UserTierContext';
 import type { VideoSettings, PixVerseModel, VideoQuality, MotionMode, AspectRatio } from '../../types';
@@ -38,6 +38,14 @@ export default function PromptBuilder({ templatePrompt, settings, onSettingsChan
   const { user } = useUserTier();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [prompt, setPrompt] = useState(templatePrompt);
+
+  useEffect(() => {
+    if (settings.prompt && settings.prompt !== prompt) {
+      setPrompt(settings.prompt);
+    } else if (templatePrompt && templatePrompt !== prompt) {
+      setPrompt(templatePrompt);
+    }
+  }, [settings.prompt, templatePrompt]);
 
   const handlePromptChange = (newPrompt: string) => {
     setPrompt(newPrompt);
@@ -88,26 +96,34 @@ export default function PromptBuilder({ templatePrompt, settings, onSettingsChan
 
       {/* Quick Settings */}
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Duration */}
+        {/* Duration - Fixed at 30s */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-text-secondary">
-            Duration (seconds per clip)
+            Video Duration
           </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min="5"
-              max="15"
-              step="1"
-              value={settings.duration}
-              onChange={(e) => onSettingsChange({ duration: Number(e.target.value) })}
-              className="flex-1 h-2 rounded-full bg-secondary appearance-none cursor-pointer accent-accent"
-            />
-            <span className="w-12 text-center font-medium">{settings.duration}s</span>
+          <div className="p-4 rounded-xl bg-accent/5 border border-accent/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-2xl font-bold text-accent">30s</p>
+                <p className="text-xs text-text-muted mt-1">
+                  6 shots × 5s per shot
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 text-xs rounded bg-accent/10 text-accent">
+                  Fixed
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1 mt-3">
+              <span className="px-2 py-1 text-xs rounded bg-accent/10 text-accent">
+                Minimum 30s ✓
+              </span>
+              <span className="px-2 py-1 text-xs rounded bg-secondary text-text-muted">
+                4-8 shots
+              </span>
+            </div>
           </div>
-          <p className="text-xs text-text-muted">
-            6 clips × {settings.duration}s = {6 * settings.duration}+ seconds total
-          </p>
         </div>
 
         {/* Model */}
@@ -149,20 +165,30 @@ export default function PromptBuilder({ templatePrompt, settings, onSettingsChan
                   Video Quality
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {qualityOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => onSettingsChange({ quality: opt.value })}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                        settings.quality === opt.value
-                          ? 'bg-accent text-primary'
-                          : 'bg-secondary text-text-secondary hover:text-text-primary'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                  {qualityOptions.map((opt) => {
+                    const isDraft = ['360p', '540p', '720p'].includes(opt.value);
+                    const isFinal = opt.value === '1080p';
+                    
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => onSettingsChange({ quality: opt.value })}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          settings.quality === opt.value
+                            ? 'bg-accent text-primary'
+                            : 'bg-secondary text-text-secondary hover:text-text-primary'
+                        }`}
+                      >
+                        {opt.label}
+                        {isDraft && <span className="ml-1 text-xs opacity-70">(Draft)</span>}
+                        {isFinal && <span className="ml-1 text-xs opacity-70">(Final)</span>}
+                      </button>
+                    );
+                  })}
                 </div>
+                <p className="text-xs text-text-muted">
+                  Draft: 720p (use fewer credits) | Final: 1080p (best quality)
+                </p>
               </div>
 
               {/* Motion Mode */}
@@ -193,21 +219,47 @@ export default function PromptBuilder({ templatePrompt, settings, onSettingsChan
                   Aspect Ratio (Export Format)
                 </label>
                 <div className="grid grid-cols-3 gap-3">
-                  {aspectOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => onSettingsChange({ aspectRatio: opt.value })}
-                      className={`p-4 rounded-xl border-2 text-left transition-all ${
-                        settings.aspectRatio === opt.value
-                          ? 'border-accent bg-accent/5'
-                          : 'border-border hover:border-accent/50'
-                      }`}
-                    >
-                      <div className="font-medium">{opt.label}</div>
-                      <div className="text-xs text-text-muted mt-1">{opt.platforms}</div>
-                    </button>
-                  ))}
+                  {aspectOptions.map((opt) => {
+                    const isSocial = opt.value === '9:16';
+                    const isPresentation = opt.value === '16:9';
+                    const isEcommerce = opt.value === '1:1';
+                    
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => onSettingsChange({ aspectRatio: opt.value })}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          settings.aspectRatio === opt.value
+                            ? 'border-accent bg-accent/5'
+                            : 'border-border hover:border-accent/50'
+                        }`}
+                      >
+                        <div className="font-medium">{opt.label}</div>
+                        <div className="text-xs text-text-muted mt-1">{opt.platforms}</div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {isSocial && (
+                            <span className="px-2 py-0.5 text-xs rounded bg-purple-500/10 text-purple-600">
+                              Social
+                            </span>
+                          )}
+                          {isPresentation && (
+                            <span className="px-2 py-0.5 text-xs rounded bg-blue-500/10 text-blue-600">
+                              Presentation
+                            </span>
+                          )}
+                          {isEcommerce && (
+                            <span className="px-2 py-0.5 text-xs rounded bg-green-500/10 text-green-600">
+                              E-commerce
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
+                <p className="text-xs text-text-muted mt-2">
+                  9:16 for TikTok/Reels | 16:9 for YouTube/presentations | 1:1 for Instagram/catalogs
+                </p>
               </div>
 
               {/* Negative Prompt */}

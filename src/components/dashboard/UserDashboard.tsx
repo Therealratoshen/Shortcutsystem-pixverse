@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { useUserTier } from '../../contexts/UserTierContext';
 import { useVideo } from '../../contexts/VideoContext';
-import { Video, Zap, Clock, Star, TrendingUp, Crown } from 'lucide-react';
+import { Video, Zap, Clock, Star, TrendingUp, Crown, X } from 'lucide-react';
+import VideoPlayer from '../ui/VideoPlayer';
 
 export default function UserDashboard() {
   const { user, setUserTier } = useUserTier();
   const { state } = useVideo();
+  const [selectedVideo, setSelectedVideo] = useState<any>(null);
 
   const stats = [
     {
@@ -130,13 +133,22 @@ export default function UserDashboard() {
           ) : (
             <div className="grid md:grid-cols-3 gap-4">
               {state.generatedVideos.slice(0, 6).map((video) => (
-                <div key={video.id} className="rounded-xl overflow-hidden bg-secondary">
+                <div
+                  key={video.id}
+                  className="rounded-xl overflow-hidden bg-secondary cursor-pointer hover:ring-2 hover:ring-accent transition-all"
+                  onClick={() => setSelectedVideo(video)}
+                >
                   <div className="aspect-video relative">
                     <img
                       src={video.thumbnail || 'https://via.placeholder.com/400x225'}
                       alt="Video thumbnail"
                       className="w-full h-full object-cover"
                     />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-accent/90 flex items-center justify-center">
+                        <Video className="w-6 h-6 text-primary ml-1" />
+                      </div>
+                    </div>
                     <div className="absolute bottom-2 right-2 px-2 py-1 rounded bg-black/70 text-xs font-medium">
                       {video.duration}s
                     </div>
@@ -161,7 +173,7 @@ export default function UserDashboard() {
               { title: 'Advanced Settings', desc: 'Motion modes, quality control, aspect ratios', enabled: user.tier === 'pro' },
               { title: 'Batch Generation', desc: 'Generate multiple videos at once', enabled: user.tier === 'pro' },
               { title: 'Priority Processing', desc: 'Skip the queue with priority generation', enabled: user.tier === 'pro' },
-              { title: 'Extended Duration', desc: 'Up to 15 seconds per clip', enabled: user.tier === 'pro' },
+              { title: 'Extended Duration', desc: 'Up to 60 seconds per clip', enabled: user.tier === 'pro' },
               { title: 'Analytics Dashboard', desc: 'Track your video performance', enabled: user.tier === 'pro' },
             ].map((feature, i) => (
               <div
@@ -184,6 +196,47 @@ export default function UserDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Video Modal */}
+      {selectedVideo && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedVideo(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl bg-secondary rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setSelectedVideo(null)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Video Player */}
+            <VideoPlayer
+              url={selectedVideo.url || selectedVideo.videoUrl || ''}
+              poster={selectedVideo.thumbnail}
+            />
+
+            {/* Video Info */}
+            <div className="p-6">
+              <h3 className="text-xl font-bold mb-2">Fashion Video</h3>
+              <p className="text-sm text-text-secondary mb-4">
+                {selectedVideo.prompt || 'Generated video'}
+              </p>
+              <div className="flex items-center gap-4 text-sm text-text-muted">
+                <span>{selectedVideo.quality}</span>
+                <span>{selectedVideo.duration}s</span>
+                <span>{selectedVideo.model}</span>
+                <span>{new Date(selectedVideo.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

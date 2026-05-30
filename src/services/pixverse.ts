@@ -258,8 +258,8 @@ export const getModelInfo = (): { model: PixVerseModel; description: string }[] 
 export const validateSettings = (settings: VideoSettings): string[] => {
   const errors: string[] = [];
 
-  if (settings.duration < 1 || settings.duration > 15) {
-    errors.push('Duration must be between 1 and 15 seconds');
+  if (settings.duration < 1 || settings.duration > 60) {
+    errors.push('Duration must be between 1 and 60 seconds');
   }
 
   if (!settings.prompt || settings.prompt.trim().length === 0) {

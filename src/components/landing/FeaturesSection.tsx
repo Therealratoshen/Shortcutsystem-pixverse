@@ -8,8 +8,8 @@ const features = [
   },
   {
     icon: Clock,
-    title: '30+ Seconds',
-    description: 'Multi-clip videos perfect for TikTok, Shopee & Instagram Reels',
+    title: '6+ Minutes',
+    description: 'Extended videos for longer content and storytelling',
   },
   {
     icon: Download,

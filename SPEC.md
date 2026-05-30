@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Shortcutsystem** is a web platform that helps online fashion sellers create AI-generated marketing videos using PixVerse to sell more products on platforms like Shopee, TikTok, Instagram, and Lazada.
+**Shortcutsistem** is a web platform that helps online fashion sellers create AI-generated marketing videos using PixVerse to sell more products on platforms like Shopee, TikTok, Instagram, and Lazada.
 
 Built for the **TRAE x PixVerse Video Generation Track Hackathon** (May 30, 2026, Jakarta).
 

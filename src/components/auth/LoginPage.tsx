@@ -200,7 +200,7 @@ export default function LoginPage() {
 
         {/* Demo Notice */}
         <p className="text-center text-xs text-text-muted mt-6">
-          This is a demo login for Shortcutsystem. No real authentication required.
+          This is a demo login for Shortcutsistem. No real authentication required.
         </p>
       </div>
     </div>
