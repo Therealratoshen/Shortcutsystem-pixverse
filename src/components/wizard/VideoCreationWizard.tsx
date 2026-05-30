@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Sparkles, Check, Play, RefreshCw } from 'lucide-
 import { useVideo } from '../../contexts/VideoContext';
 import { useUserTier } from '../../contexts/UserTierContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
+import { uploadImage, generateVideo as apiGenerateVideo, pollVideoStatus } from '../../services/pixverse';
 import type { VideoSettings, GeneratedVideo, WizardStep } from '../../types';
 import UploadZone from './UploadZone';
 import TemplateSelector from './TemplateSelector';
@@ -86,36 +87,57 @@ export default function VideoCreationWizard() {
     setWizardStep('generate');
 
     try {
-      // Simulate video generation (in production, use real PixVerse API)
+      // Step 1: Upload image to PixVerse
       setGenerationStatus('Uploading image to PixVerse...');
       setProgress(10);
 
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const uploadResult = await uploadImage(state.uploadedImage.file);
       setProgress(20);
       setGenerationStatus('Image uploaded successfully');
 
-      // Simulate video generation (in production, call PixVerse API)
-      setGenerationStatus('Generating video clips (1/6)...');
-      
-      for (let i = 1; i <= 6; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setProgress(20 + (i * 12));
-        setGenerationStatus(`Generating video clips (${i}/6)...`);
-      }
+      // Step 2: Generate video with PixVerse API
+      setGenerationStatus('Starting video generation...');
 
-      setGenerationStatus('Finalizing video...');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const videoId = await apiGenerateVideo(uploadResult.imgId, {
+        duration: settings.duration,
+        model: settings.model as any,
+        motionMode: settings.motionMode,
+        prompt: settings.prompt,
+        quality: settings.quality,
+        aspectRatio: settings.aspectRatio,
+        negativePrompt: settings.negativePrompt,
+      });
 
-      // Create generated video object (use demo URL in production)
+      setProgress(30);
+      setGenerationStatus('Generating video...');
+
+      // Step 3: Poll for video completion
+      const result = await pollVideoStatus(
+        videoId,
+        (status) => {
+          setGenerationStatus(status);
+          // Progress from 30% to 90%
+          if (status.includes('%')) {
+            const match = status.match(/(\d+)/);
+            if (match) {
+              setProgress(Math.min(90, 30 + parseInt(match[1]) / 10));
+            }
+          }
+        }
+      );
+
+      setProgress(100);
+      setGenerationStatus('Video generated successfully!');
+
+      // Create generated video object
       const video: GeneratedVideo = {
         id: crypto.randomUUID(),
-        videoId: `pix_${Date.now()}`,
-        url: 'https://www.w3schools.com/html/mov_bbb.mp4', // Demo video
+        videoId: String(videoId),
+        url: result.url,
         thumbnail: state.uploadedImage.url,
         status: 'completed',
         prompt: settings.prompt,
-        duration: settings.duration * 6,
+        duration: settings.duration,
         quality: settings.quality,
         model: settings.model,
         aspectRatio: settings.aspectRatio,
@@ -129,15 +151,13 @@ export default function VideoCreationWizard() {
       incrementVideosGenerated();
       decrementVideosRemaining();
 
-      setProgress(100);
-      setGenerationStatus('Video generated successfully!');
-      
       await new Promise(resolve => setTimeout(resolve, 500));
       setWizardStep('export');
 
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to generate video');
-      setGenerationStatus('Error: Failed to generate video');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate video';
+      setError(errorMessage);
+      setGenerationStatus(`Error: ${errorMessage}`);
     } finally {
       setIsGenerating(false);
       setGenerating(false);
