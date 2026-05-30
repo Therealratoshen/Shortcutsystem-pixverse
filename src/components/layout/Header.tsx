@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X, Sparkles, Video, Grid3X3, LayoutDashboard } from 'lucide-react';
+import { Menu, X, Sparkles, Video, Grid3X3, LayoutDashboard, LogIn } from 'lucide-react';
 import { useVideo } from '../../contexts/VideoContext';
 import { useUserTier } from '../../contexts/UserTierContext';
 
@@ -54,8 +54,15 @@ export default function Header() {
             })}
           </nav>
 
-          {/* User Tier Badge */}
+          {/* User Tier Badge & Login */}
           <div className="hidden md:flex items-center gap-3">
+            <button
+              onClick={() => setView('login')}
+              className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dark text-primary font-medium rounded-lg transition-all"
+            >
+              <LogIn className="w-4 h-4" />
+              Login
+            </button>
             <span
               className={`px-3 py-1 rounded-full text-xs font-semibold ${
                 user.tier === 'pro'

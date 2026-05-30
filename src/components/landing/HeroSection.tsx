@@ -32,7 +32,7 @@ export default function HeroSection() {
         >
           <Sparkles className="w-4 h-4 text-accent" />
           <span className="text-sm text-accent font-medium">
-            Powered by PixVerse AI • TRAE Hackathon 2026
+            AI Fashion Video Generator • TRAE Hackathon 2026
           </span>
         </div>
 

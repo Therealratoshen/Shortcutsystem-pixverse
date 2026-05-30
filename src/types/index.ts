@@ -151,7 +151,7 @@ export interface FavoriteVideo {
 
 // App state
 export interface AppState {
-  currentView: 'landing' | 'create' | 'gallery' | 'dashboard';
+  currentView: 'landing' | 'login' | 'create' | 'gallery' | 'dashboard';
   wizardStep: WizardStep;
   selectedTemplate: Template | null;
   uploadedImage: UploadedImage | null;

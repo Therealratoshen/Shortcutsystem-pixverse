@@ -9,6 +9,7 @@ import VideoCreationWizard from './components/wizard/VideoCreationWizard';
 import VideoGallery from './components/gallery/VideoGallery';
 import UserDashboard from './components/dashboard/UserDashboard';
 import Footer from './components/layout/Footer';
+import LoginPage from './components/auth/LoginPage';
 
 function AppContent() {
   const { state } = useVideo();
@@ -29,6 +30,7 @@ function AppContent() {
           </>
         )}
         
+        {state.currentView === 'login' && <LoginPage />}
         {state.currentView === 'create' && <VideoCreationWizard />}
         {state.currentView === 'gallery' && <VideoGallery />}
         {state.currentView === 'dashboard' && <UserDashboard />}

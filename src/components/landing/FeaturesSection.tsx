@@ -4,7 +4,7 @@ const features = [
   {
     icon: Zap,
     title: 'AI-Powered',
-    description: 'PixVerse V6 model generates stunning fashion videos automatically',
+    description: 'AI model generates stunning fashion videos automatically',
   },
   {
     icon: Clock,
